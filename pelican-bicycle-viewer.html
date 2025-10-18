@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pelican on a Bicycle - Generative Art</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 50%, #B0E0E6 100%);
+            font-family: 'Georgia', serif;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 300px;
+            z-index: 1000;
+        }
+        #info h1 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #2c3e50;
+        }
+        #info p {
+            margin: 5px 0;
+            font-size: 12px;
+            color: #555;
+            line-height: 1.4;
+        }
+        #info .instruction {
+            font-style: italic;
+            color: #3498db;
+            margin-top: 10px;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>🐦 Pelican on a Bicycle 🚲</h1>
+        <p><strong>Move your mouse</strong> to create wind</p>
+        <p><strong>Click</strong> to make the pelican flap</p>
+        <p class="instruction">Watch the harmony between organic grace and mechanical precision</p>
+    </div>
+
+    <script>
+        // Global variables
+        let pelican;
+        let bicycle;
+        let time = 0;
+        let windForce = { x: 0, y: 0 };
+        let backgroundColor;
+        let particles = [];
+        let isFlapping = false;
+        let flapTimer = 0;
+
+        // Color palettes
+        const pelicanColors = {
+            body: '#F5F5DC',
+            bodyShade: '#E8E8C8',
+            beak: '#FF8C00',
+            beakTip: '#FFB347',
+            pouch: '#FFA07A',
+            eye: '#2C1810'
+        };
+
+        const bicycleColors = {
+            frame: '#DC143C',
+            wheels: '#2F4F4F',
+            spokes: '#C0C0C0',
+            seat: '#8B4513',
+            handlebars: '#696969'
+        };
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            backgroundColor = color(135, 206, 235, 150);
+            
+            // Initialize pelican and bicycle
+            pelican = new Pelican(width / 2, height / 2 - 50);
+            bicycle = new Bicycle(width / 2, height / 2 + 20);
+            
+            // Create background particles
+            for (let i = 0; i < 30; i++) {
+                particles.push(new BackgroundParticle());
+            }
+        }
+
+        function draw() {
+            // Dynamic background with time-based gradient
+            let topColor = lerpColor(color(135, 206, 235), color(255, 218, 185), abs(sin(time * 0.0005)));
+            let bottomColor = lerpColor(color(176, 224, 230), color(173, 216, 230), abs(cos(time * 0.0005)));
+            
+            for (let y = 0; y < height; y++) {
+                let inter = map(y, 0, height, 0, 1);
+                let c = lerpColor(topColor, bottomColor, inter);
+                stroke(c);
+                line(0, y, width, y);
+            }
+            
+            // Update and draw background particles (clouds, birds)
+            for (let particle of particles) {
+                particle.update();
+                particle.display();
+            }
+            
+            // Calculate wind force from mouse movement
+            windForce.x = (mouseX - pmouseX) * 0.1;
+            windForce.y = (mouseY - pmouseY) * 0.1;
+            
+            // Update flapping
+            if (isFlapping) {
+                flapTimer++;
+                if (flapTimer > 30) {
+                    isFlapping = false;
+                    flapTimer = 0;
+                }
+            }
+            
+            // Update and draw bicycle (behind pelican)
+            bicycle.update();
+            bicycle.display();
+            
+            // Update and draw pelican
+            pelican.update();
+            pelican.display();
+            
+            // Draw connection/balance line (subtle)
+            stroke(0, 0, 0, 30);
+            strokeWeight(2);
+            let contactY = bicycle.y - 15;
+            line(pelican.x, pelican.y + 30, bicycle.x, contactY);
+            
+            // Increment time
+            time++;
+        }
+
+        function mousePressed() {
+            isFlapping = true;
+            flapTimer = 0;
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+
+        // Pelican class
+        class Pelican {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.bodySize = 60;
+                this.beakLength = 80;
+                this.wingSpan = 120;
+                this.rotation = 0;
+                this.bobOffset = 0;
+                this.pouchExpansion = 0;
+            }
+            
+            update() {
+                // Gentle bobbing motion
+                this.bobOffset = sin(time * 0.05) * 8;
+                
+                // Respond to wind
+                this.x += windForce.x * 0.3;
+                this.y += windForce.y * 0.3;
+                
+                // Gentle rotation for balance
+                this.rotation = sin(time * 0.03) * 0.05 + windForce.x * 0.001;
+                
+                // Pouch breathing
+                this.pouchExpansion = sin(time * 0.08) * 5 + 5;
+                
+                // Keep on screen
+                this.x = constrain(this.x, 100, width - 100);
+                this.y = constrain(this.y, 100, height - 200);
+            }
+            
+            display() {
+                push();
+                translate(this.x, this.y + this.bobOffset);
+                rotate(this.rotation);
+                
+                // Draw wings
+                this.drawWings();
+                
+                // Draw body
+                this.drawBody();
+                
+                // Draw head and beak
+                this.drawHead();
+                
+                // Draw tail
+                this.drawTail();
+                
+                pop();
+            }
+            
+            drawWings() {
+                let wingFlap = isFlapping ? sin(flapTimer * 0.5) * 30 : sin(time * 0.1) * 10;
+                
+                // Left wing
+                push();
+                translate(-10, 0);
+                rotate(-PI / 6 + wingFlap * 0.02);
+                
+                // Wing shape with feather detail
+                fill(pelicanColors.body);
+                stroke(pelicanColors.bodyShade);
+                strokeWeight(2);
+                beginShape();
+                vertex(0, 0);
+                bezierVertex(-30, -20, -60, -30, -this.wingSpan/2, -25);
+                bezierVertex(-this.wingSpan/2 + 10, -15, -50, 0, -20, 10);
+                vertex(0, 0);
+                endShape(CLOSE);
+                
+                // Feather details
+                for (let i = 0; i < 5; i++) {
+                    stroke(pelicanColors.bodyShade);
+                    strokeWeight(1);
+                    let fx = -20 - i * 15;
+                    let fy = -20 + sin(i) * 5;
+                    line(fx, fy, fx - 15, fy - 10);
+                }
+                pop();
+                
+                // Right wing
+                push();
+                translate(10, 0);
+                rotate(PI / 6 - wingFlap * 0.02);
+                
+                fill(pelicanColors.body);
+                stroke(pelicanColors.bodyShade);
+                strokeWeight(2);
+                beginShape();
+                vertex(0, 0);
+                bezierVertex(30, -20, 60, -30, this.wingSpan/2, -25);
+                bezierVertex(this.wingSpan/2 - 10, -15, 50, 0, 20, 10);
+                vertex(0, 0);
+                endShape(CLOSE);
+                
+                // Feather details
+                for (let i = 0; i < 5; i++) {
+                    stroke(pelicanColors.bodyShade);
+                    strokeWeight(1);
+                    let fx = 20 + i * 15;
+                    let fy = -20 + sin(i) * 5;
+                    line(fx, fy, fx + 15, fy - 10);
+                }
+                pop();
+            }
+            
+            drawBody() {
+                // Main body - organic ellipse
+                fill(pelicanColors.body);
+                stroke(pelicanColors.bodyShade);
+                strokeWeight(2);
+                ellipse(0, 0, this.bodySize * 1.2, this.bodySize);
+                
+                // Body texture with noise
+                noStroke();
+                fill(pelicanColors.bodyShade);
+                for (let i = 0; i < 20; i++) {
+                    let angle = random(TWO_PI);
+                    let radius = random(this.bodySize * 0.3);
+                    let x = cos(angle) * radius;
+                    let y = sin(angle) * radius * 0.8;
+                    ellipse(x, y, 3, 2);
+                }
+            }
+            
+            drawHead() {
+                push();
+                translate(this.bodySize * 0.4, -this.bodySize * 0.2);
+                
+                // Head
+                fill(pelicanColors.body);
+                stroke(pelicanColors.bodyShade);
+                strokeWeight(2);
+                ellipse(0, 0, 35, 40);
+                
+                // Eye
+                fill(pelicanColors.eye);
+                noStroke();
+                ellipse(5, -5, 8, 8);
+                fill(255);
+                ellipse(6, -6, 3, 3);
+                
+                // Beak
+                fill(pelicanColors.beak);
+                stroke(pelicanColors.beakTip);
+                strokeWeight(2);
+                
+                // Upper beak
+                beginShape();
+                vertex(10, 5);
+                bezierVertex(40, 0, 70, 10, this.beakLength, 15);
+                bezierVertex(this.beakLength - 5, 12, 50, 8, 15, 8);
+                endShape(CLOSE);
+                
+                // Lower beak with pouch
+                let pouchDepth = 25 + this.pouchExpansion;
+                fill(pelicanColors.pouch);
+                stroke(pelicanColors.beak);
+                strokeWeight(2);
+                beginShape();
+                vertex(10, 5);
+                bezierVertex(30, 15, 50, 20 + this.pouchExpansion, this.beakLength, 15);
+                bezierVertex(60, 25 + this.pouchExpansion, 40, pouchDepth, 15, 15);
+                endShape(CLOSE);
+                
+                // Pouch detail lines
+                stroke(pelicanColors.beak);
+                strokeWeight(1);
+                for (let i = 0; i < 3; i++) {
+                    let x1 = 20 + i * 15;
+                    let y1 = 10 + i * 3;
+                    let x2 = x1 + 10;
+                    let y2 = y1 + 10 + this.pouchExpansion * 0.5;
+                    line(x1, y1, x2, y2);
+                }
+                
+                pop();
+            }
+            
+            drawTail() {
+                push();
+                translate(-this.bodySize * 0.5, 10);
+                
+                fill(pelicanColors.body);
+                stroke(pelicanColors.bodyShade);
+                strokeWeight(2);
+                
+                // Fan-shaped tail
+                for (let i = -2; i <= 2; i++) {
+                    push();
+                    rotate(i * 0.2);
+                    beginShape();
+                    vertex(0, 0);
+                    bezierVertex(-15, 5, -25, 10, -30, 15);
+                    bezierVertex(-25, 12, -15, 8, 0, 5);
+                    endShape(CLOSE);
+                    pop();
+                }
+                
+                pop();
+            }
+        }
+
+        // Bicycle class
+        class Bicycle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.wheelRadius = 40;
+                this.rotation = 0;
+                this.wobble = 0;
+            }
+            
+            update() {
+                // Wheels rotate based on time
+                this.rotation += 0.05 + abs(windForce.x) * 0.01;
+                
+                // Gentle wobble for balance
+                this.wobble = sin(time * 0.05) * 2;
+                
+                // Follow pelican position (with lag)
+                this.x += (pelican.x - this.x) * 0.05;
+                this.y = pelican.y + 70 + this.wobble;
+            }
+            
+            display() {
+                push();
+                translate(this.x, this.y);
+                
+                // Shadow
+                fill(0, 0, 0, 30);
+                noStroke();
+                ellipse(0, 60, 120, 20);
+                
+                // Draw wheels
+                this.drawWheel(-45, 0);
+                this.drawWheel(45, 0);
+                
+                // Draw frame
+                this.drawFrame();
+                
+                // Draw pedals
+                this.drawPedals();
+                
+                // Draw handlebars
+                this.drawHandlebars();
+                
+                // Draw seat
+                this.drawSeat();
+                
+                pop();
+            }
+            
+            drawWheel(offsetX, offsetY) {
+                push();
+                translate(offsetX, offsetY);
+                
+                // Tire
+                fill(bicycleColors.wheels);
+                stroke(50);
+                strokeWeight(3);
+                ellipse(0, 0, this.wheelRadius * 2, this.wheelRadius * 2);
+                
+                // Rim
+                noFill();
+                stroke(bicycleColors.spokes);
+                strokeWeight(2);
+                ellipse(0, 0, this.wheelRadius * 1.6, this.wheelRadius * 1.6);
+                
+                // Hub
+                fill(bicycleColors.spokes);
+                noStroke();
+                ellipse(0, 0, 10, 10);
+                
+                // Spokes
+                stroke(bicycleColors.spokes);
+                strokeWeight(1);
+                for (let i = 0; i < 12; i++) {
+                    let angle = (TWO_PI / 12) * i + this.rotation;
+                    let x1 = cos(angle) * 5;
+                    let y1 = sin(angle) * 5;
+                    let x2 = cos(angle) * (this.wheelRadius - 5);
+                    let y2 = sin(angle) * (this.wheelRadius - 5);
+                    line(x1, y1, x2, y2);
+                }
+                
+                pop();
+            }
+            
+            drawFrame() {
+                stroke(bicycleColors.frame);
+                strokeWeight(5);
+                
+                // Main triangle frame
+                line(-45, 0, 0, -30); // Back to top
+                line(0, -30, 45, 0);  // Top to front
+                line(-45, 0, 45, 0);  // Bottom
+                
+                // Seat post
+                line(-20, 0, -20, -40);
+                
+                // Front fork
+                line(35, 0, 30, -25);
+                
+                // Chain stays
+                stroke(bicycleColors.frame);
+                strokeWeight(3);
+                line(-30, 0, 0, 0); // To pedal area
+                line(0, 0, 30, 0);
+            }
+            
+            drawPedals() {
+                push();
+                translate(0, 0);
+                
+                // Crank rotation
+                let crankAngle = this.rotation * 2;
+                
+                // Chainring
+                fill(bicycleColors.spokes);
+                stroke(50);
+                strokeWeight(2);
+                ellipse(0, 0, 30, 30);
+                
+                // Pedals
+                fill(50);
+                stroke(30);
+                strokeWeight(2);
+                
+                // Left pedal
+                push();
+                rotate(crankAngle);
+                translate(0, 15);
+                rect(-8, -3, 16, 6, 2);
+                pop();
+                
+                // Right pedal
+                push();
+                rotate(crankAngle + PI);
+                translate(0, 15);
+                rect(-8, -3, 16, 6, 2);
+                pop();
+                
+                pop();
+            }
+            
+            drawHandlebars() {
+                push();
+                translate(30, -25);
+                
+                stroke(bicycleColors.handlebars);
+                strokeWeight(4);
+                
+                // Handlebar horizontal
+                line(-20, 0, 20, 0);
+                
+                // Grips
+                fill(bicycleColors.seat);
+                stroke(30);
+                strokeWeight(2);
+                ellipse(-20, 0, 8, 12);
+                ellipse(20, 0, 8, 12);
+                
+                // Bell
+                fill(255, 215, 0);
+                stroke(50);
+                strokeWeight(1);
+                ellipse(-15, -5, 10, 10);
+                
+                pop();
+            }
+            
+            drawSeat() {
+                push();
+                translate(-20, -40);
+                
+                fill(bicycleColors.seat);
+                stroke(30);
+                strokeWeight(2);
+                
+                // Seat shape
+                beginShape();
+                vertex(-15, 0);
+                bezierVertex(-12, -8, 12, -8, 15, 0);
+                bezierVertex(12, 5, -12, 5, -15, 0);
+                endShape(CLOSE);
+                
+                pop();
+            }
+        }
+
+        // Background particle class for clouds and ambient birds
+        class BackgroundParticle {
+            constructor() {
+                this.x = random(width);
+                this.y = random(height * 0.6);
+                this.size = random(40, 100);
+                this.speed = random(0.2, 0.5);
+                this.type = random() > 0.7 ? 'bird' : 'cloud';
+                this.birdOffset = random(TWO_PI);
+            }
+            
+            update() {
+                this.x += this.speed;
+                if (this.x > width + this.size) {
+                    this.x = -this.size;
+                    this.y = random(height * 0.6);
+                }
+            }
+            
+            display() {
+                if (this.type === 'cloud') {
+                    this.drawCloud();
+                } else {
+                    this.drawBird();
+                }
+            }
+            
+            drawCloud() {
+                noStroke();
+                fill(255, 255, 255, 180);
+                
+                ellipse(this.x, this.y, this.size, this.size * 0.6);
+                ellipse(this.x - this.size * 0.3, this.y, this.size * 0.7, this.size * 0.5);
+                ellipse(this.x + this.size * 0.3, this.y, this.size * 0.6, this.size * 0.4);
+            }
+            
+            drawBird() {
+                stroke(60, 60, 80, 150);
+                strokeWeight(2);
+                noFill();
+                
+                let flapOffset = sin(time * 0.1 + this.birdOffset) * 10;
+                
+                // Simple V-shaped bird
+                beginShape();
+                vertex(this.x - 15, this.y + flapOffset);
+                vertex(this.x, this.y);
+                vertex(this.x + 15, this.y + flapOffset);
+                endShape();
+            }
+        }
+    </script>
+</body>
+</html>
